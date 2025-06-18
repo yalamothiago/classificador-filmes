@@ -19,10 +19,8 @@ Este projeto é um classificador probabilístico de filmes baseado em notas do I
     python -c "import nltk; nltk.download('stopwords'); nltk.download('wordnet'); nltk.download('omw-1.4')"
     ```
 
-4.  **Baixe o dataset IMDB.csv:**
-    * **IMPORTANTE:** Você precisa baixar o arquivo `IMBD.csv` do Kaggle (https://www.kaggle.com/datasets/payamamanat/imbd-dataset) e colocá-lo na mesma pasta do script Python. Este arquivo não está incluído no repositório.
 
-5.  **Execute o script:**
+4.  **Execute o script:**
     ```bash
     python recomendador_probabilistico.py
     ```

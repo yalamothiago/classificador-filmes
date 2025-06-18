@@ -8,8 +8,9 @@ import os
 import re
 import nltk
 from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer # Para lematização
-from sklearn.naive_bayes import MultinomialNB # Para Naive Bayes
+from nltk.stem import WordNetLemmatizer
+from sklearn.naive_bayes import MultinomialNB
+import gradio as gr # Import Gradio
 
 # Certifique-se de baixar as stopwords e o wordnet do NLTK uma vez:
 # nltk.download('stopwords')
@@ -17,8 +18,7 @@ from sklearn.naive_bayes import MultinomialNB # Para Naive Bayes
 # nltk.download('omw-1.4') # Open Multilingual Wordnet, útil para lematização
 
 # --- Funções Auxiliares ---
-def limpar_console():
-    os.system('cls' if os.name == 'nt' else 'clear')
+# A função limpar_console não é necessária para a aplicação web
 
 # Inicializa o lematizador fora da função para melhor performance
 lemmatizer = WordNetLemmatizer()
@@ -109,8 +109,8 @@ y_sentiment = df['sentiment_encoded']
 # --- 2. Divisão Treino/Teste ---
 print("-" * 40)
 print("Dividindo dados em conjuntos de treino e teste...")
-X_train_text, X_test_text, y_train, y_test, _, X_test_original_title = train_test_split(
-    X_text, y_sentiment, df['title'],
+X_train_text, X_test_text, y_train, y_test = train_test_split(
+    X_text, y_sentiment,
     test_size=0.2, random_state=42, stratify=y_sentiment
 )
 
@@ -143,148 +143,99 @@ naive_bayes_model.fit(X_train_vectorized, y_train)
 print("Modelo Multinomial Naive Bayes treinado com sucesso!")
 print("-" * 40)
 
-# --- 5. Avaliação dos Modelos ---
+# --- 5. Avaliação dos Modelos (Opcional para a aplicação web, mas mantido para contexto) ---
+# Você pode comentar esta seção se quiser um script mais leve para a web app,
+# mas é útil para verificar o desempenho antes de implantar.
+
 print("--- Avaliação do Modelo de Regressão Logística no Conjunto de Teste ---")
 y_pred_logistic = logistic_model.predict(X_test_vectorized)
 y_pred_proba_logistic = logistic_model.predict_proba(X_test_vectorized)
-
 print(f"Acurácia (Regressão Logística) no conjunto de teste: {accuracy_score(y_test, y_pred_logistic):.2f}")
 print("\nRelatório de Classificação (Regressão Logística):\n", classification_report(y_test, y_pred_logistic, target_names=['negative_rating', 'positive_rating']))
-
 fpr_logistic, tpr_logistic, _ = roc_curve(y_test, y_pred_proba_logistic[:, 1])
 auc_score_logistic = auc(fpr_logistic, tpr_logistic)
 print(f"AUC (Regressão Logística): {auc_score_logistic:.2f}")
-
-# Plotar ROC para Regressão Logística
-plt.figure(figsize=(8, 6))
-plt.plot(fpr_logistic, tpr_logistic, color='blue', lw=2, label=f'Curva ROC Regressão Logística (AUC = {auc_score_logistic:.2f})')
-plt.plot([0, 1], [0, 1], color='gray', lw=2, linestyle='--', label='Classificador Aleatório')
-plt.xlim([0.0, 1.0])
-plt.ylim([0.0, 1.05])
-plt.xlabel('Taxa de Falsos Positivos (False Positive Rate)')
-plt.ylabel('Taxa de Verdadeiros Positivos (True Positive Rate)')
-plt.title('Curva ROC para Classificação de Sentimento (Regressão Logística)')
-plt.legend(loc='lower right')
-plt.grid(True)
-plt.show()
 
 print("-" * 40)
 print("\n--- Avaliação do Modelo Multinomial Naive Bayes no Conjunto de Teste ---")
 y_pred_nb = naive_bayes_model.predict(X_test_vectorized)
 y_pred_proba_nb = naive_bayes_model.predict_proba(X_test_vectorized)
-
 print(f"Acurácia (Naive Bayes) no conjunto de teste: {accuracy_score(y_test, y_pred_nb):.2f}")
 print("\nRelatório de Classificação (Naive Bayes):\n", classification_report(y_test, y_pred_nb, target_names=['negative_rating', 'positive_rating']))
-
 fpr_nb, tpr_nb, _ = roc_curve(y_test, y_pred_proba_nb[:, 1])
 auc_score_nb = auc(fpr_nb, tpr_nb)
 print(f"AUC (Naive Bayes): {auc_score_nb:.2f}")
-
-# Plotar ROC para Naive Bayes
-plt.figure(figsize=(8, 6))
-plt.plot(fpr_nb, tpr_nb, color='red', lw=2, label=f'Curva ROC Naive Bayes (AUC = {auc_score_nb:.2f})')
-plt.plot([0, 1], [0, 1], color='gray', lw=2, linestyle='--', label='Classificador Aleatório')
-plt.xlim([0.0, 1.0])
-plt.ylim([0.0, 1.05])
-plt.xlabel('Taxa de Falsos Positivos (False Positive Rate)')
-plt.ylabel('Taxa de Verdadeiros Positivos (True Positive Rate)')
-plt.title('Curva ROC para Classificação de Sentimento (Multinomial Naive Bayes)')
-plt.legend(loc='lower right')
-plt.grid(True)
-plt.show()
-
 print("-" * 40)
 
-# --- 6. Função de Classificação Interativa ---
-def classificar_sentimento_interativo(model_to_use, model_name): # Recebe o modelo e seu nome
-    limpar_console()
-    print(f"## Classificador Probabilístico de Filmes (Baseado em Nota IMDb) - Modelo: {model_name} ##")
-    print("-------------------------------------------------------------------")
-    print("Este modelo prevê a probabilidade de um filme ter uma nota IMDb alta (>7.0) ou baixa (<7.0).")
-    print("Você pode inserir o nome do filme, sua descrição e seus gêneros.")
-    print("Ex: 'O Poderoso Chefão'")
-    print("Descrição: 'Uma epopeia sobre a família Corleone, que ascende ao poder na máfia de Nova York.'")
-    print("Gêneros: 'Crime, Drama, Máfia'")
-    print("Ou digite 'sair' para encerrar.")
-    print("-------------------------------------------------------------------")
 
+# --- Função para a Interface Gradio ---
+def classify_movie_sentiment(model_choice, title_input, description_input, genre_input):
+    """
+    Classifica o sentimento de um filme (probabilidade de nota alta/baixa)
+    usando o modelo escolhido e retorna o resultado formatado para Gradio.
+    """
+    if model_choice == "Regressão Logística":
+        model_to_use = logistic_model
+        model_name = "Regressão Logística"
+    elif model_choice == "Multinomial Naive Bayes":
+        model_to_use = naive_bayes_model
+        model_name = "Multinomial Naive Bayes"
+    else:
+        return "Erro: Modelo inválido selecionado."
+
+    if not description_input and not genre_input:
+        return "Por favor, digite a descrição e/ou os gêneros para a análise."
+
+    combined_input = description_input + " " + genre_input
+    processed_input = preprocess_text(combined_input)
+    input_vetorized = tfidf_vectorizer.transform([processed_input])
+
+    if input_vetorized.sum() == 0:
+        return "Não consegui reconhecer nenhuma palavra da sua entrada no meu vocabulário. Tente uma descrição/gênero mais detalhada ou comum.<br>Lembre-se que palavras muito raras ou que não foram vistas no treinamento podem ser ignoradas."
+
+    probabilidades = model_to_use.predict_proba(input_vetorized)[0]
+    prob_negativo_rating = probabilidades[0]
+    prob_positivo_rating = probabilidades[1]
+
+    previsao_encoded = model_to_use.predict(input_vetorized)[0]
     reverse_sentiment_mapping = {v: k for k, v in sentiment_mapping.items()}
+    previsao_sentimento = reverse_sentiment_mapping[previsao_encoded]
 
-    while True:
-        title_input = input("\nNome do Filme/Série (ou 'sair'): ").strip()
-        if title_input.lower() == 'sair':
-            print("Obrigado por usar o recomendador! Até mais.")
-            break
+    # Formatando a saída para Gradio com HTML para melhor visual
+    output_html = f"<h3>--- Análise Probabilística para o Filme ---</h3>"
+    output_html += f"<p><strong>Filme/Série:</strong> '{title_input}'</p>"
+    output_html += f"<p><strong>Descrição:</strong> '{description_input}'</p>"
+    output_html += f"<p><strong>Gêneros Analisados:</strong> '{genre_input}'</p>"
+    output_html += f"<p>Probabilidade de ter <b>NOTA BAIXA</b> (&lt;{RATING_THRESHOLD:.1f}): <span style='color:red; font-weight:bold;'>{prob_negativo_rating:.2%}</span></p>"
+    output_html += f"<p>Probabilidade de ter <b>NOTA ALTA</b> (&gt;={RATING_THRESHOLD:.1f}): <span style='color:green; font-weight:bold;'>{prob_positivo_rating:.2%}</span></p>"
+    
+    if previsao_sentimento == 'positive':
+        output_html += f"<p style='font-size: 1.2em; text-align: center; margin-top: 20px;'>🎉 <strong>PROVAVELMENTE É UM FILME/SÉRIE BEM AVALIADO!</strong> 🎉</p>"
+    else:
+        output_html += f"<p style='font-size: 1.2em; text-align: center; margin-top: 20px;'>😔 <strong>PROVAVELMENTE É UM FILME/SÉRIE COM NOTA BAIXA.</strong> 😔</p>"
 
-        description_input = input("Descrição do Filme/Série: ").strip()
-        genre_input = input("Gêneros (separados por vírgula, Ex: Ação, Drama): ").strip()
+    return output_html
 
-        if not description_input and not genre_input:
-            print("Por favor, digite a descrição e/ou os gêneros para a análise.")
-            continue
-
-        try:
-            combined_input = description_input + " " + genre_input
-            processed_input = preprocess_text(combined_input)
-            input_vetorized = tfidf_vectorizer.transform([processed_input])
-
-            if input_vetorized.sum() == 0:
-                print("Não consegui reconhecer nenhuma palavra da sua entrada no meu vocabulário. Tente uma descrição/gênero mais detalhada ou comum.")
-                print("Lembre-se que palavras muito raras ou que não foram vistas no treinamento podem ser ignoradas.")
-                continue
-
-            probabilidades = model_to_use.predict_proba(input_vetorized)[0]
-            prob_negativo_rating = probabilidades[0]
-            prob_positivo_rating = probabilidades[1]
-
-            previsao_encoded = model_to_use.predict(input_vetorized)[0]
-            previsao_sentimento = reverse_sentiment_mapping[previsao_encoded]
-
-            print("\n--- Análise Probabilística para o Filme ---")
-            print(f"Filme/Série: '{title_input}'")
-            print(f"Descrição: '{description_input}'")
-            print(f"Gêneros Analisados: '{genre_input}'")
-            print(f"Probabilidade de ter **NOTA BAIXA** (<{RATING_THRESHOLD:.1f}): {prob_negativo_rating:.2%}")
-            print(f"Probabilidade de ter **NOTA ALTA** (>={RATING_THRESHOLD:.1f}): {prob_positivo_rating:.2%}")
-            
-            if previsao_sentimento == 'positive':
-                print(f"\n**Previsão:** 🎉 **PROVAVELMENTE É UM FILME/SÉRIE BEM AVALIADO!** 🎉")
-            else:
-                print(f"\n**Previsão:** 😔 **PROVAVELMENTE É UM FILME/SÉRIE COM NOTA BAIXA.** 😔")
-
-            print("\n-------------------------------------------------------------------")
-            input("Pressione Enter para continuar...")
-            limpar_console()
-            print(f"## Classificador Probabilístico de Filmes (Baseado em Nota IMDb) - Modelo: {model_name} ##")
-            print("-------------------------------------------------------------------")
-            print("Digite os dados de outro filme/série ou 'sair' para encerrar.")
-            print("-------------------------------------------------------------------")
-
-        except Exception as e:
-            print(f"Ocorreu um erro: {e}. Tente novamente.")
-            print(f"Detalhes do erro: {e}")
-            continue
-
-# --- Iniciar a aplicação ---
+# --- Configuração da Interface Gradio ---
 if __name__ == "__main__":
-    # Permite ao usuário escolher qual modelo usar
-    while True:
-        limpar_console()
-        print("Escolha o modelo para a classificação interativa:")
-        print("1. Regressão Logística")
-        print("2. Multinomial Naive Bayes")
-        print("3. Sair")
-        choice = input("Digite o número da sua escolha: ").strip()
+    # Remove as chamadas plt.show() para evitar que as janelas pop-up apareçam ao iniciar a web app
+    # Se você quiser ver as curvas ROC, execute o script sem a parte do Gradio ou adicione-as
+    # como um componente de visualização separada no Gradio, se necessário.
 
-        if choice == '1':
-            classificar_sentimento_interativo(logistic_model, "Regressão Logística")
-            break # Sai do loop de escolha após o uso do classificador
-        elif choice == '2':
-            classificar_sentimento_interativo(naive_bayes_model, "Multinomial Naive Bayes")
-            break # Sai do loop de escolha após o uso do classificador
-        elif choice == '3':
-            print("Encerrando o programa.")
-            break
-        else:
-            print("Escolha inválida. Por favor, digite 1, 2 ou 3.")
-            input("Pressione Enter para continuar...")
+    # Cria a interface Gradio
+    interface = gr.Interface(
+        fn=classify_movie_sentiment,
+        inputs=[
+            gr.Dropdown(["Regressão Logística", "Multinomial Naive Bayes"], label="Escolha o Modelo"),
+            gr.Textbox(label="Nome do Filme/Série", placeholder="Ex: O Poderoso Chefão"),
+            gr.Textbox(label="Descrição do Filme/Série", placeholder="Ex: Uma epopeia sobre a família Corleone, que ascende ao poder na máfia de Nova York."),
+            gr.Textbox(label="Gêneros (separados por vírgula)", placeholder="Ex: Crime, Drama, Máfia")
+        ],
+        outputs=gr.HTML(), # Usa gr.HTML para exibir o conteúdo HTML formatado
+        title="Classificador Probabilístico de Filmes (Baseado em Nota IMDb)",
+        description="Este modelo prevê a probabilidade de um filme/série ter uma nota IMDb alta (>=7.0) ou baixa (<7.0). "
+                    "Insira o nome, descrição e gêneros para obter uma previsão."
+    )
+
+    # Lança a interface Gradio
+    interface.launch()
