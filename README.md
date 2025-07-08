@@ -1,11 +1,11 @@
 # Classificador de Filmes IA
 Integrantes: 
-Yálamo Thiago 
-Robert Danilo
-Alicia Monteiro
-Kleiton Josivan
-Ciro Assuero
-João Vitor Fernandes
+Yálamo Thiago, 
+Robert Danilo,
+Alicia Monteiro,
+Kleiton Josivan,
+Ciro Assuero,
+João Vitor Fernandes.
 
 Este projeto é um classificador probabilístico de filmes baseado em notas do IMDb. Ele usa a descrição e o gênero de um filme para prever a probabilidade de ele ter uma nota alta (>= 7.0) ou baixa (< 7.0).
 
